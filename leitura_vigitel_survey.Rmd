@@ -38,28 +38,66 @@ options("survey.multicore" = TRUE)
 caminho <- "/datahome/mario/datasets/Vigitel/"
 ```
 
+```{r}
+Years <- c("2012","2013","2014","2015","2016","2017","2018","2019","2020","2021")
+vigitels_arqs <- paste0("Vigitel-",Years,"-peso-rake.xls")
+vigitels_paths <- file.path(caminho,vigitels_arqs)
+```
+
+Criamos uma lista de data.frames. O **R** tem bastante funções que facilitam a manipulação de listas.
+
+```{r message=FALSE, warning=FALSE}
+vigitels <- lapply(vigitels_paths, read_excel)
+vigitels <- set_names(vigitels,Years)
+```
+
+Determinando o conjunto mínimo de variáveis; aqui não estou considerando que uma mesma variável tenha mudado de nome de um ano para outro; vou apenas selecionar o conjunto mínimo para poder juntar todos os anos em um data.frame.
 
 ```{r}
-
-Vigitel2012 <- read_excel(file.path(caminho,"Vigitel-2012-peso-rake.xls"))
+variaveis <- names(vigitels[[1]])
 ```
+```{r}
+for (df in vigitels) {
+  variaveis <- intersect(variaveis, names(df))
+}
+```
+
+Selecionando as variáveis que estão presentes em todos os anos.
+
+```{r}
+vigitels_min <- purrr::map(vigitels, dplyr::select, all_of(variaveis))
+```
+
+```{r}
+vigitel_df <- purrr::list_rbind(vigitels_min)
+```
+
+Para limpar a memória, vou excluir as listas.
+```{r}
+vigitels <- NULL
+rm(vigitels)
+vigitels_min <- NULL
+rm(vigitels_min)
+```
+
+
 ## Verificando `NA´s`
 
 Verificando `NA´s` em algumas variáveis:
 
 ```{r}
 # peso
-sum(is.na(Vigitel2012$q9))
+sum(is.na(vigitel_df$q9))
 # altura
-sum(is.na(Vigitel2012$q11))
+sum(is.na(vigitel_df$q11))
 ```
 
 ```{r}
 # cigarros
-sum(is.na(Vigitel2012$q61))
+sum(is.na(vigitel_df$q61))
 ```
 ```{r}
-Vigitel2012 <- Vigitel2012 |> mutate(one = 1)
+vigitel_df <- vigitel_df |> mutate(one = 1)
 ```
 
 ## Acertando variáveis com códigos "777"  e "877"
@@ -67,29 +105,29 @@ Vigitel2012 <- Vigitel2012 |> mutate(one = 1)
 Varias variáveis contém os códigos "777" e "877" para respostas "Não sei" ou "Não quero responder". Vamos substituir esses códigos por `NA` já que efetivamente é o que representa.
 
 ```{r}
-Vigitel2012 <- mutate(Vigitel2012,
+vigitel_df <- mutate(vigitel_df,
                       q9 = case_when(q9 == 777 ~ NA,
                                      q9 == 888 ~ NA
                                      ))
 
-#Vigitel2012$q9[Vigitel2012$q9==777]=NA
-#Vigitel2012$q9[Vigitel2012$q9==888]=NA
-#Vigitel2012$q11[Vigitel2012$q11==777]=NA
-#Vigitel2012$q11[Vigitel2012$q11==888]=NA
-#Vigitel2012$q35[Vigitel2012$q35==888]=NA
-#Vigitel2012$q61[Vigitel2012$q61==888]=NA
-Vigitel2012 <- mutate(Vigitel2012,
+#vigitel_df$q9[vigitel_df$q9==777]=NA
+#vigitel_df$q9[vigitel_df$q9==888]=NA
+#vigitel_df$q11[vigitel_df$q11==777]=NA
+#vigitel_df$q11[vigitel_df$q11==888]=NA
+#vigitel_df$q35[vigitel_df$q35==888]=NA
+#vigitel_df$q61[vigitel_df$q61==888]=NA
+vigitel_df <- mutate(vigitel_df,
                       q61 = case_when(q61 == 777 ~ NA,
                                      q61 == 888 ~ NA
                                      ))
-#Vigitel2012$q69[Vigitel2012$q69==777]=NA
-#Vigitel2012$q69[Vigitel2012$q69==888]=NA
-#Vigitel2012$q75[Vigitel2012$q75==777]=NA
-#Vigitel2012$q76[Vigitel2012$q76==777]=NA
-#Vigitel2012$r133a[Vigitel2012$r133a==777]=NA
-#Vigitel2012$r133a[Vigitel2012$r133a==888]=NA
-#Vigitel2012$r133b[Vigitel2012$r133b==777]=NA
-#Vigitel2012$r133b[Vigitel2012$r133b==888]=NA
+#vigitel_df$q69[vigitel_df$q69==777]=NA
+#vigitel_df$q69[vigitel_df$q69==888]=NA
+#vigitel_df$q75[vigitel_df$q75==777]=NA
+#vigitel_df$q76[vigitel_df$q76==777]=NA
+#vigitel_df$r133a[vigitel_df$r133a==777]=NA
+#vigitel_df$r133a[vigitel_df$r133a==888]=NA
+#vigitel_df$r133b[vigitel_df$r133b==777]=NA
+#vigitel_df$r133b[vigitel_df$r133b==888]=NA
 ```
 
 ## Algumas variáveis de interesse (exemplo)
@@ -104,7 +142,7 @@ Vigitel2012 <- mutate(Vigitel2012,
 * **q35** - bebida alcoólica (1 - sim, 2 - não, 888 - não quis informar)
 * **q36** - freq alcool 
 * **q42** - exercício físico (1 - sim, 2 - não)
-* **q43a** - qual exercício físico
+* **q43a** - qual exercício físico   **Não tem em todas as bases de 2012-2021**
 * **q44** - pratica exerc. físico 1 vez na semana (1 - sim, 2 - não)
 * **q45** - freq. exercício 
 * **q46** - duração exercício 
@@ -120,7 +158,7 @@ Vigitel2012 <- mutate(Vigitel2012,
 
 
 ```{r}
-Vigitel2012 <-  Vigitel2012 |> 
+vigitel_df <-  vigitel_df |> 
   mutate(gender = case_when(q7 == 1 ~ "Masc.",
                               q7 == 2 ~ "Fem."),
                        fetaria = case_when(fet == 1 ~ "18-24",
@@ -156,34 +194,41 @@ Vigitel2012 <-  Vigitel2012 |>
 ### Ignorando ponderação
 
 ```{r}
-vig2012unw <- survey::svydesign(ids=~1, strata=NULL, weights= NULL, data=Vigitel2012)
+vigitel_unw <- survey::svydesign(ids=~1, strata=NULL, weights= NULL, data=vigitel_df)
 ```
 
 ### Com ponderação
 
 ```{r}
-vig2012srv <- survey::svydesign(ids=~1, strata = NULL, weights = ~pesorake, data = Vigitel2012)
+vigitel_srv <- survey::svydesign(ids=~1, strata = NULL, weights = ~pesorake, data = vigitel_df)
 ```
 
 ## Comparando resultados com e sem ponderação
 
 ```{r}
 # com ponderação
-svymean(~q6, vig2012srv)
+svymean(~q6, subset(vigitel_srv,ano==2012))
 ```
 ```{r}
 # sem ponderação
-svymean(~q6, vig2012unw)
+svymean(~q6, subset(vigitel_unw, ano == 2012))
 ```
 
 
 ```{r}
 # usando os dados brutos, lidos do xlsx
-summarise(Vigitel2012, idademedia = mean(q6, na.rm=T), Size = n())
+summarise(filter(vigitel_df, ano == 2012), idademedia = mean(q6, na.rm=T), Size = n())
 ```
 
 
 ## Algumas tabulações para exemplo
+
+Vou trabalhar com o ano 2012 para ilustrar
+
+```{r}
+vig2012srv <- subset(vigitel_srv, ano == 2012)
+```
+
 
 ### Quantas pessoas estão representadas nessa pesquisa
 
@@ -206,7 +251,7 @@ as.data.frame(round(svytable(~fetaria+gender , vig2012srv, addNA = TRUE, Ntotal 
 ### Pratica exercício físico?
 
 ```{r}
-as.data.frame(round(svytable(~exfis , vig2012srv, addNA = TRUE, Ntotal = 100),2)) |>
+as.data.frame(round(svytable(~exfis , vigitel_srv, addNA = TRUE, Ntotal = 100),2)) |>
   flextable()
 ```
 
@@ -247,6 +292,60 @@ as.data.frame(round(svytable(~bebalc + presalta , vig2012srv, addNA = TRUE, Ntot
 as.data.frame(round(svytable(~presalta+q60 , vig2012srv, addNA = TRUE, Ntotal = 100),2)) |>
   pivot_wider(names_from = q60, values_from = Freq) |>
   rename("Sim,Diariamente"=`1`,"Sim,NãoDiariam"=`2`,"Não"=`3`) |>
+  flextable()
+```
+
+### Prevalência de Pressão Alta de 2012 a 2021
+
+Usando a expressão abaixo, o percentual é calculado em relação a toda a base, ou seja, não é por ano.
+
+```{r}
+as.data.frame(round(svytable(~presalta+ano , vigitel_srv, addNA = TRUE, Ntotal = 100),2)) |>
+  pivot_wider(names_from = ano, values_from = Freq) |>
+  flextable()
+```
+
+Para calcular o percentual ano a ano, de modo que seja possível analisar uma tendência, precisamos elaborar um pouco mais.
+
+Aqui, a análise é feita ano a ano, mas com valores absolutos.
+
+```{r}
+pressaoAno <- svyby(~one, ~presalta+ano, vigitel_srv, svytotal, vartype = "ci", Ntotal = 100, addNA = TRUE, multicore = TRUE)
+pressaoAno |> flextable()
+```
+
+Vou calcular a população de cada ano
+
+```{r}
+totalano <- svyby(~one, ~ano, vigitel_srv, svytotal, vartype = "ci", Ntotal = 100, addNA = TRUE, multicore = TRUE)
+```
+
+Criar um data.frame com essa informação
+
+```{r}
+pressaoAno <- left_join(pressaoAno, select(totalano, ano, pop=one), by = "ano")
+```
+
+Calcular as frequências para cada ano
+
+```{r}
+pressaoAno <- pressaoAno |>
+  mutate(FreqPres = one/pop, Freqci_l = ci_l/pop, Freqci_u = ci_u/pop)
+```
+
+
+```{r}
+pressaoAno_sel <- pressaoAno |>
+  select(presalta, ano, dplyr::starts_with("Freq"))
+```
+
+Uma tabela em formato "wide" para facilitar a visualização. A diferença para 100% são os NAs.
+
+```{r}
+pressaoAno_sel |> 
+  select(presalta, FreqPres, ano ) |>
+  mutate(FreqPres = round(FreqPres,3)*100) |>
+  pivot_wider(names_from = ano, values_from = FreqPres) |>
   flextable()
 ```
 
