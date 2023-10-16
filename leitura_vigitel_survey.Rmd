@@ -13,13 +13,35 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(readxl)
 library(survey)
+library(srvyr)
+library(kableExtra)
+library(tidyr)
+library(janitor)
+library(pander)
+library(crosstable)
+library(jtools)
+library(flextable)
+library(gt)
+library(gtsummary)
+library(gtExtras)
+library(rio)
 ```
+
+```{r}
+options("survey.multicore" = TRUE)
+```
+
 
 ## Leitura da base
 
 ```{r}
-library(readxl)
-Vigitel2012 <- read_excel("dados/Vigitel-2012-peso-rake.xls")
+caminho <- "/datahome/mario/datasets/Vigitel/"
+```
+
+
+```{r}
+
+Vigitel2012 <- read_excel(file.path(caminho,"Vigitel-2012-peso-rake.xls"))
 ```
 ## Verificando `NA´s`
 
@@ -35,6 +57,9 @@ sum(is.na(Vigitel2012$q11))
 ```{r}
 # cigarros
 sum(is.na(Vigitel2012$q61))
+```
+```{r}
+Vigitel2012 <- Vigitel2012 |> mutate(one = 1)
 ```
 
 ## Acertando variáveis com códigos "777"  e "877"
@@ -67,6 +92,65 @@ Vigitel2012 <- mutate(Vigitel2012,
 #Vigitel2012$r133b[Vigitel2012$r133b==888]=NA
 ```
 
+## Algumas variáveis de interesse (exemplo)
+
+* **q6** - idade, em anos
+* **fet** - faixa etária (1 - 18-24, 2 - 25-34, 3 - 35-44, 4 - 45-54, 5 - 55-64, 6 - 65+)
+* **q7** - sexo
+* **civil** - estado civil
+* **q8a** - escolaridade
+* **q9** - peso (kg)
+* **q11** - altura (cm)
+* **q35** - bebida alcoólica (1 - sim, 2 - não, 888 - não quis informar)
+* **q36** - freq alcool 
+* **q42** - exercício físico (1 - sim, 2 - não)
+* **q43a** - qual exercício físico
+* **q44** - pratica exerc. físico 1 vez na semana (1 - sim, 2 - não)
+* **q45** - freq. exercício 
+* **q46** - duração exercício 
+* **q60** - fumante (1 - sim, diariamente, 2 - sim, mas não diariamente, 3 - não)
+* **q74** - estado de saúde (auto-avaliação) - (1 - muito bom - 5 muito ruim)
+* **q75** - pressão alta
+* **r203** - médico receitou remédio p pressão alta (1 - sim, 2 - não)  **Não tem essa variável na base de 2012**
+* **r129** - toma remédio pra pressão alta (1 - sim, 2 - não)
+* **q9_i** - peso (kg) - valores imputados
+* **q11_i** - altura (cm) - valores imputados
+
+## Acerto nas variáveis categóricas
+
+
+```{r}
+Vigitel2012 <-  Vigitel2012 |> 
+  mutate(gender = case_when(q7 == 1 ~ "Masc.",
+                              q7 == 2 ~ "Fem."),
+                       fetaria = case_when(fet == 1 ~ "18-24",
+                                       fet == 2 ~ "25-34",
+                                       fet == 3 ~ "35-44",
+                                       fet == 4 ~ "45-54",
+                                       fet == 5 ~ "55-64",
+                                       fet == 6 ~ "65+",
+                                       TRUE ~ NA),
+                       bebalc = case_when(q35 == 1 ~ "Sim",
+                                          q35 == 2 ~ "Não",
+                                          TRUE ~ NA),
+                       exfis = case_when (q42 == 1  ~ "Sim",
+                                          q42 == 2  ~ "Não",
+                                          TRUE ~ NA),
+                       prat1sem = case_when(q44 == 1 ~ "Sim",
+                                            q44 == 2 ~ "Não",
+                                            TRUE ~ NA),
+                       presalta = case_when(q75 == 1 ~ "Sim",
+                                            q75 == 2 ~ "Não",
+                                            TRUE ~ NA),
+#                       medrec = case_when(r203 == 1 ~ "Sim",
+#                                          r203 == 2 ~ "Não",
+#                                          TRUE ~ NA),
+                       tomarempressao = case_when(r129 == 1 ~ "Sim",
+                                                  r129 == 2 ~ "Não",
+                                                  TRUE ~ NA))
+```
+
+
 ## Criando o objeto survey
 
 ### Ignorando ponderação
@@ -84,15 +168,85 @@ vig2012srv <- survey::svydesign(ids=~1, strata = NULL, weights = ~pesorake, data
 ## Comparando resultados com e sem ponderação
 
 ```{r}
+# com ponderação
 svymean(~q6, vig2012srv)
 ```
 ```{r}
+# sem ponderação
 svymean(~q6, vig2012unw)
 ```
 
 
 ```{r}
-summarise(Vigitel2012, idademedia = mean(q6, na.rm=T))
+# usando os dados brutos, lidos do xlsx
+summarise(Vigitel2012, idademedia = mean(q6, na.rm=T), Size = n())
 ```
 
+
+## Algumas tabulações para exemplo
+
+### Quantas pessoas estão representadas nessa pesquisa
+
+```{r}
+todos <- svytable(~one, vig2012srv)
+todos
+```
+
+Veja a diferença: a base tem 45448 observações, mas representa `r as.integer(todos)` pessoas, porque é uma base ponderada.
+
+
+### Idade (faixa etária)  por sexo
+
+```{r}
+as.data.frame(round(svytable(~fetaria+gender , vig2012srv, addNA = TRUE, Ntotal = 100),2)) |>
+  pivot_wider(names_from = gender, values_from = Freq) |>
+  flextable()
+```
+
+### Pratica exercício físico?
+
+```{r}
+as.data.frame(round(svytable(~exfis , vig2012srv, addNA = TRUE, Ntotal = 100),2)) |>
+  flextable()
+```
+
+### Quem pratica exercício físico vs Pressão Alta
+
+presalta
+
+
+```{r}
+as.data.frame(round(svytable(~exfis + presalta , vig2012srv, addNA = TRUE, Ntotal = 100),2)) |>
+  flextable()
+```
+
+A variável `presalta` tem **NA**, por isso as duas linhas que não tem essa informação; é interessante saber qtos NA's se tem na base; eu não fiz essa investigação aqui.
+
+
+### Bebida alcoólica
+
+bebalc
+
+```{r}
+as.data.frame(round(svytable(~bebalc , vig2012srv, addNA = TRUE, Ntotal = 100),2)) |>
+  flextable()
+```
+
+### Quem bebe alcool vs pressão alta
+
+```{r}
+as.data.frame(round(svytable(~bebalc + presalta , vig2012srv, addNA = TRUE, Ntotal = 100),2)) |>
+  flextable()
+```
+
+
+
+### Pressão alta vs fumante
+
+```{r}
+as.data.frame(round(svytable(~presalta+q60 , vig2012srv, addNA = TRUE, Ntotal = 100),2)) |>
+  pivot_wider(names_from = q60, values_from = Freq) |>
+  rename("Sim,Diariamente"=`1`,"Sim,NãoDiariam"=`2`,"Não"=`3`) |>
+  flextable()
+```
 
