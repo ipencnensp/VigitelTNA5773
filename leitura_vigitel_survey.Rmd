@@ -1,0 +1,98 @@
+---
+title: "Vigitel"
+author: "Mário Olímpio de Menezes"
+date: "25/09/2023"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(readxl)
+library(survey)
+```
+
+## Leitura da base
+
+```{r}
+library(readxl)
+Vigitel2012 <- read_excel("dados/Vigitel-2012-peso-rake.xls")
+```
+## Verificando `NA´s`
+
+Verificando `NA´s` em algumas variáveis:
+
+```{r}
+# peso
+sum(is.na(Vigitel2012$q9))
+# altura
+sum(is.na(Vigitel2012$q11))
+```
+
+```{r}
+# cigarros
+sum(is.na(Vigitel2012$q61))
+```
+
+## Acertando variáveis com códigos "777"  e "877"
+
+Varias variáveis contém os códigos "777" e "877" para respostas "Não sei" ou "Não quero responder". Vamos substituir esses códigos por `NA` já que efetivamente é o que representa.
+
+```{r}
+Vigitel2012 <- mutate(Vigitel2012,
+                      q9 = case_when(q9 == 777 ~ NA,
+                                     q9 == 888 ~ NA
+                                     ))
+
+#Vigitel2012$q9[Vigitel2012$q9==777]=NA
+#Vigitel2012$q9[Vigitel2012$q9==888]=NA
+#Vigitel2012$q11[Vigitel2012$q11==777]=NA
+#Vigitel2012$q11[Vigitel2012$q11==888]=NA
+#Vigitel2012$q35[Vigitel2012$q35==888]=NA
+#Vigitel2012$q61[Vigitel2012$q61==888]=NA
+Vigitel2012 <- mutate(Vigitel2012,
+                      q61 = case_when(q61 == 777 ~ NA,
+                                     q61 == 888 ~ NA
+                                     ))
+#Vigitel2012$q69[Vigitel2012$q69==777]=NA
+#Vigitel2012$q69[Vigitel2012$q69==888]=NA
+#Vigitel2012$q75[Vigitel2012$q75==777]=NA
+#Vigitel2012$q76[Vigitel2012$q76==777]=NA
+#Vigitel2012$r133a[Vigitel2012$r133a==777]=NA
+#Vigitel2012$r133a[Vigitel2012$r133a==888]=NA
+#Vigitel2012$r133b[Vigitel2012$r133b==777]=NA
+#Vigitel2012$r133b[Vigitel2012$r133b==888]=NA
+```
+
+## Criando o objeto survey
+
+### Ignorando ponderação
+
+```{r}
+vig2012unw <- survey::svydesign(ids=~1, strata=NULL, weights= NULL, data=Vigitel2012)
+```
+
+### Com ponderação
+
+```{r}
+vig2012srv <- survey::svydesign(ids=~1, strata = NULL, weights = ~pesorake, data = Vigitel2012)
+```
+
+## Comparando resultados com e sem ponderação
+
+```{r}
+svymean(~q6, vig2012srv)
+```
+```{r}
+svymean(~q6, vig2012unw)
+```
+
+
+```{r}
+summarise(Vigitel2012, idademedia = mean(q6, na.rm=T))
+```
+
+
